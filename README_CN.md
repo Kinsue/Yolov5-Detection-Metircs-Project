@@ -1,24 +1,23 @@
 # Yolov5 Detection Metircs Project
 
-English | [简体中文](https://github.com/Kinsue/Yolov5-Detection-Metircs-Project/blob/main/README_CN.md)
+[English](https://github.com/Kinsue/Yolov5-Detection-Metircs-Project#a-sample-folder-structure) | 简体中文
 
-## Project Introduction
+## 项目介绍
 
-Yolov5 Detection Metrics Project calculates the inference results of Yolov5 and obtains the corresponding mAP (mean Average Precision) metric.
+Yolov5 Detection Metrics Project 项目针对 Yolov5 的推理结果进行计算, 得到对应的 mAP(mean Average Precision)指标
 
 
-## Usage method
+## 使用方法
 
-This project aims to evaluate the given detection results in a simple and efficient manner. Please follow the steps below to start the evaluation.
+本项目旨在以一种简单高效的方法评估给定的检测结果，请你跟随以下步骤来开始评估
 
-1. [Environment](#Environment)
-2. [Prepare groundtruth data](#prepare-groundtruth-data)
-3. [Prepare detection data](#prepare-detection-data)
-4. [Prepare image data](#prepare-image-data)
-5. [Prepare label.txt](#prepare-labeltxt)
+1. [环境安装](#环境安装)
+2. [准备 groundtruth 数据](#准备-groundtruth-数据)
+3. [准备 detection 数据](#准备-detection-数据)
+4. [准备图片数据](#准备图片数据)
+5. [准备 label 数据](#准备-label-数据)
 
-### Environment
-
+### 环境安装
 ```shell
 # clone This Project
 $ git clone https://github.com/Kinsue/Yolov5-Detection-Metircs-Project.git
@@ -33,11 +32,11 @@ $ pip install -r requirements.txt
 
 
 
-### Prepare groundtruth data
+### 准备 groundtruth 数据
 
-- groundtruth should be a txt text file. In the file, each line should represent each detection box in the following format:
+- groundtruth 应为txt文本文件，在文件中，每一行应该以如下格式表示每一个检测框
 	-  `<class_id> <x_center> <y_center> <width> <hight>`
-- Sample
+- 数据样例
 
 ```text
 4 0.42916123424598 0.44592635546535225 0.6853541938287702 0.7677587706581618
@@ -48,13 +47,13 @@ $ pip install -r requirements.txt
 
 
 
-### Prepare detection data
+### 准备 detection 数据
 
-- In the detection folder, there should be text files with the same name as the corresponding groundtruth files. Each line in the file should represent a detection box in the following format.
+- 在detection文件夹中，应该包含与对应 groundtruth 文件同名的文本文件。文件中每一行应该以如下格式表示每一个检测框
 	-  `<class_id> <x_center> <y_center> <width> <hight> <confidence>`
 
-	> **Slightly different from the ground truth data, the detection data should have confidence scores appended in the last column.**
-- Sample 
+	> **与groundtruth数据稍有不同，detection 数据应该在最后一列附加置信度数据**
+- 数据样例
 
 ```txt
 7 0.507611 0.933984 0.0199063 0.0101562 0.842858
@@ -66,20 +65,20 @@ $ pip install -r requirements.txt
 
 
 
-### Prepare image data
+### 准备图片数据
 
-- Please place jpg files with the same name as groundtruth in the image folder.
+- 请在图片文件夹下放置与 groundtruth 同名的 jpg 文件
 
-	> ! The current program only supports jpg files.
+	> ! 当前程序仅支持 jpg 文件
 
-### Prepare label.txt
+### 准备 label 数据
 
-- The data should be a `.txt` file, with each line in the file representing a label.
-
-
+- lable 数据应该为一个`.txt` 文件 , 文件中每一行为一个标签
 
 
-### A sample folder structure：
+
+
+### 一个数据文件夹结构样例：
 
 ```txt
 input
@@ -100,7 +99,7 @@ input
 
 
 
-## Calculate mAP
+## 计算 mAP
 
 ```shell
 $ cd {Directory of Project}
