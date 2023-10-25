@@ -76,7 +76,7 @@ def main(opt):
 
     # Read original data from txt files
     jdict, stats, ap, ap_class = [], [], [], []
-    dt, gt, im = [], [], []
+    dt, gt = [], []
     s = ('%20s' + '%11s' * 6) % ('Class', 'Images', 'Labels', 'P', 'R', 'mAP@.5', 'mAP@.5:.95')
     pbar = tqdm(sorted(det_path.glob('*.txt')), desc=s, bar_format='{l_bar}{bar:10}{r_bar}{bar:-10b}',
                 total=len(list(det_path.glob('*.txt'))))
@@ -86,27 +86,25 @@ def main(opt):
         dt.append(np.insert(np.loadtxt(file, ndmin=2), 0, i, axis=1))
         file_name = file.parts[-1].split('.txt', 1)[0]
 
+        if not dt:
+            error("* There is no detection result in directory " + str(det_path))
+
         if gt_path.joinpath(file_name + '.txt').exists():
             gt.append(np.insert(np.loadtxt(gt_path / (file_name + '.txt'), ndmin=2), 0, i, axis=1))
         else:
             error('* Do not find the groundtruth file ' + str(gt_path / (file_name + '.txt')))
 
         if image_path.joinpath(file_name + '.jpg').exists():
-            im.append(np.array(plt.imread(image_path.joinpath(file_name + '.jpg'))))
+            im = np.array(plt.imread(image_path.joinpath(file_name + '.jpg')))
         else:
             error('* Do not find the image file ' + str(image_path / (file_name + '.jpg')))
 
+        gt[-1][:, 2:] *= np.array(im.shape[:2] * 2)
+        dt[-1][:, 2:-1] *= np.array(im.shape[:2] * 2) 
 
-    if not dt:
-        error("* There is no detection result in directory " + str(det_path))
 
     batch_gt = np.vstack(gt)
     batch_det = np.vstack(dt)
-
-    batch_gt[:, 2:] *= np.array(im[i].shape[:2] * 2)  # (batch_idx class x y w h ) to ( batch_idx class x1 y1 x2 y2)
-
-    batch_det[:, 2:-1] *= np.array(
-        im[i].shape[:2] * 2)  # (batch_idx class conf x y w h ) to ( batch_idx class conf x1 y1 x2 y2)
 
     # Config
     iouv = torch.linspace(0.5, 0.95, 10, device=device)  # iou vector for mAP@0.5:0.95
