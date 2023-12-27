@@ -25,7 +25,7 @@ $ git clone https://github.com/Kinsue/Yolov5-Detection-Metircs-Project.git
 ```
 
 ```shell
-$ conda create -n ydmp 
+$ conda create -n ydmp python=3.10
 $ conda activate ydmp 
 
 $ pip install -r requirements.txt 
