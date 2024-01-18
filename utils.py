@@ -3,6 +3,9 @@ from pathlib import Path
 import numpy as np
 import torch
 import matplotlib.pyplot as plt
+import math 
+import os
+import cv2
 
 
 def ap_per_class(tp, conf, pred_cls, target_cls, plot=False, save_dir='.', names=(), eps=1e-16):
@@ -180,3 +183,154 @@ def plot_mc_curve(px, py, save_dir=Path('mc_curve.png'), names=(), xlabel='Confi
     plt.title(f'{ylabel}-Confidence Curve')
     fig.savefig(save_dir, dpi=250)
     plt.close()
+
+def letterbox(im, new_shape=(640, 640), color=(114, 114, 114), auto=True, scaleFill=False, scaleup=True, stride=32):
+    # Resize and pad image while meeting stride-multiple constraints
+    shape = im.shape[:2]  # current shape [height, width]
+    if isinstance(new_shape, int):
+        new_shape = (new_shape, new_shape)
+
+    # Scale ratio (new / old)
+    r = min(new_shape[0] / shape[0], new_shape[1] / shape[1])
+    if not scaleup:  # only scale down, do not scale up (for better val mAP)
+        r = min(r, 1.0)
+
+    # Compute padding
+    ratio = r, r  # width, height ratios
+    new_unpad = int(round(shape[1] * r)), int(round(shape[0] * r))
+    dw, dh = new_shape[1] - new_unpad[0], new_shape[0] - new_unpad[1]  # wh padding
+    if auto:  # minimum rectangle
+        dw, dh = np.mod(dw, stride), np.mod(dh, stride)  # wh padding
+    elif scaleFill:  # stretch
+        dw, dh = 0.0, 0.0
+        new_unpad = (new_shape[1], new_shape[0])
+        ratio = new_shape[1] / shape[1], new_shape[0] / shape[0]  # width, height ratios
+
+    dw /= 2  # divide padding into 2 sides
+    dh /= 2
+
+    if shape[::-1] != new_unpad:  # resize
+        im = cv2.resize(im, new_unpad, interpolation=cv2.INTER_LINEAR)
+    top, bottom = int(round(dh - 0.1)), int(round(dh + 0.1))
+    left, right = int(round(dw - 0.1)), int(round(dw + 0.1))
+    im = cv2.copyMakeBorder(im, top, bottom, left, right, cv2.BORDER_CONSTANT, value=color)  # add border
+    return im, ratio, (dw, dh)
+
+def load_image(self, i):
+    # Loads 1 image from dataset index 'i', returns (im, original hw, resized hw)
+    im, f, fn = (
+        self.ims[i],
+        self.im_files[i],
+        self.npy_files[i],
+    )
+    if im is None:  # not cached in RAM
+        if fn.exists():  # load npy
+            im = np.load(fn)
+        else:  # read image
+            im = cv2.imread(f)  # BGR
+            assert im is not None, f"Image Not Found {f}"
+        h0, w0 = im.shape[:2]  # orig hw
+        r = self.img_size / max(h0, w0)  # ratio
+        if r != 1:  # if sizes are not equal
+            interp = cv2.INTER_LINEAR if (self.augment or r > 1) else cv2.INTER_AREA
+            im = cv2.resize(
+                im, (math.ceil(w0 * r), math.ceil(h0 * r)), interpolation=interp
+            )
+        return im, (h0, w0), im.shape[:2]  # im, hw_original, hw_resized
+    return self.ims[i], self.im_hw0[i], self.im_hw[i]  # im, hw_original, hw_resized
+
+def xywhn2xyxy(x, w=640, h=640, padw=0, padh=0):
+    # Convert nx4 boxes from [x, y, w, h] normalized to [x1, y1, x2, y2] where xy1=top-left, xy2=bottom-right
+    y = x.clone() if isinstance(x, torch.Tensor) else np.copy(x)
+    y[..., 0] = w * (x[..., 0] - x[..., 2] / 2) + padw  # top left x
+    y[..., 1] = h * (x[..., 1] - x[..., 3] / 2) + padh  # top left y
+    y[..., 2] = w * (x[..., 0] + x[..., 2] / 2) + padw  # bottom right x
+    y[..., 3] = h * (x[..., 1] + x[..., 3] / 2) + padh  # bottom right y
+    return y
+
+def xyxy2xywhn(x, w=640, h=640, clip=False, eps=0.0):
+    # Convert nx4 boxes from [x1, y1, x2, y2] to [x, y, w, h] normalized where xy1=top-left, xy2=bottom-right
+    if clip:
+        clip_boxes(x, (h - eps, w - eps))  # warning: inplace clip
+    y = x.clone() if isinstance(x, torch.Tensor) else np.copy(x)
+    y[..., 0] = ((x[..., 0] + x[..., 2]) / 2) / w  # x center
+    y[..., 1] = ((x[..., 1] + x[..., 3]) / 2) / h  # y center
+    y[..., 2] = (x[..., 2] - x[..., 0]) / w  # width
+    y[..., 3] = (x[..., 3] - x[..., 1]) / h  # height
+    return y
+
+def xyn2xy(x, w=640, h=640, padw=0, padh=0):
+    # Convert normalized segments into pixel segments, shape (n,2)
+    y = x.clone() if isinstance(x, torch.Tensor) else np.copy(x)
+    y[..., 0] = w * x[..., 0] + padw  # top left x
+    y[..., 1] = h * x[..., 1] + padh  # top left y
+    return y
+
+def clip_boxes(boxes, shape):
+    # Clip boxes (xyxy) to image shape (height, width)
+    if isinstance(boxes, torch.Tensor):  # faster individually
+        boxes[..., 0].clamp_(0, shape[1])  # x1
+        boxes[..., 1].clamp_(0, shape[0])  # y1
+        boxes[..., 2].clamp_(0, shape[1])  # x2
+        boxes[..., 3].clamp_(0, shape[0])  # y2
+    else:  # np.array (faster grouped)
+        boxes[..., [0, 2]] = boxes[..., [0, 2]].clip(0, shape[1])  # x1, x2
+        boxes[..., [1, 3]] = boxes[..., [1, 3]].clip(0, shape[0])  # y1, y2
+
+def img2label_paths(img_paths):
+    # Define label paths as a function of image paths
+    sa, sb = (
+        f"{os.sep}images{os.sep}",
+        f"{os.sep}labels{os.sep}",
+    )  # /images/, /labels/ substrings
+    return [sb.join(x.rsplit(sa, 1)).rsplit(".", 1)[0] + ".txt" for x in img_paths]
+
+def xyxy2xywh(x):
+    # Convert nx4 boxes from [x1, y1, x2, y2] to [x, y, w, h] where xy1=top-left, xy2=bottom-right
+    y = x.clone() if isinstance(x, torch.Tensor) else np.copy(x)
+    y[..., 0] = (x[..., 0] + x[..., 2]) / 2  # x center
+    y[..., 1] = (x[..., 1] + x[..., 3]) / 2  # y center
+    y[..., 2] = x[..., 2] - x[..., 0]  # width
+    y[..., 3] = x[..., 3] - x[..., 1]  # height
+    return y
+
+def segments2boxes(segments):
+    # Convert segment labels to box labels, i.e. (cls, xy1, xy2, ...) to (cls, xywh)
+    boxes = []
+    for s in segments:
+        x, y = s.T  # segment xy
+        boxes.append([x.min(), y.min(), x.max(), y.max()])  # cls, xyxy
+    return xyxy2xywh(np.array(boxes))  # cls, xywh
+
+
+def letterbox(im, new_shape=(640, 640), color=(114, 114, 114), auto=True, scaleFill=False, scaleup=True, stride=32):
+    # Resize and pad image while meeting stride-multiple constraints
+    shape = im.shape[:2]  # current shape [height, width]
+    if isinstance(new_shape, int):
+        new_shape = (new_shape, new_shape)
+
+    # Scale ratio (new / old)
+    r = min(new_shape[0] / shape[0], new_shape[1] / shape[1])
+    if not scaleup:  # only scale down, do not scale up (for better val mAP)
+        r = min(r, 1.0)
+
+    # Compute padding
+    ratio = r, r  # width, height ratios
+    new_unpad = int(round(shape[1] * r)), int(round(shape[0] * r))
+    dw, dh = new_shape[1] - new_unpad[0], new_shape[0] - new_unpad[1]  # wh padding
+    if auto:  # minimum rectangle
+        dw, dh = np.mod(dw, stride), np.mod(dh, stride)  # wh padding
+    elif scaleFill:  # stretch
+        dw, dh = 0.0, 0.0
+        new_unpad = (new_shape[1], new_shape[0])
+        ratio = new_shape[1] / shape[1], new_shape[0] / shape[0]  # width, height ratios
+
+    dw /= 2  # divide padding into 2 sides
+    dh /= 2
+
+    if shape[::-1] != new_unpad:  # resize
+        im = cv2.resize(im, new_unpad, interpolation=cv2.INTER_LINEAR)
+    top, bottom = int(round(dh - 0.1)), int(round(dh + 0.1))
+    left, right = int(round(dw - 0.1)), int(round(dw + 0.1))
+    im = cv2.copyMakeBorder(im, top, bottom, left, right, cv2.BORDER_CONSTANT, value=color)  # add border
+    return im, ratio, (dw, dh)
