@@ -2,11 +2,14 @@ import sys
 import argparse
 import numpy as np
 import torch
+import os
 
-from utils import box_iou, ap_per_class
+from dataloader import create_dataloader
 from matplotlib import pyplot as plt
 from pathlib import Path
 from tqdm import tqdm
+
+from utils import box_iou, ap_per_class, scale_boxes, TQDM_BAR_FORMAT
 
 FILE = Path(__file__).resolve()
 ROOT = FILE.parents[0]  # YOLOv5 Detection Metircs Project Root directory
@@ -54,11 +57,11 @@ def process_batch(detections, labels, iouv):
 
 def xywh2xyxy(x):
     # Convert nx4 boxes from [x, y, w, h] to [x1, y1, x2, y2] where xy1=top-left, xy2=bottom-right
-    y = np.copy(x)
-    y[:, 0] = x[:, 0] - x[:, 2] / 2  # top left x
-    y[:, 1] = x[:, 1] - x[:, 3] / 2  # top left y
-    y[:, 2] = x[:, 0] + x[:, 2] / 2  # bottom right x
-    y[:, 3] = x[:, 1] + x[:, 3] / 2  # bottom right y
+    y = x.clone() if isinstance(x, torch.Tensor) else np.copy(x)
+    y[..., 0] = x[..., 0] - x[..., 2] / 2  # top left x
+    y[..., 1] = x[..., 1] - x[..., 3] / 2  # top left y
+    y[..., 2] = x[..., 0] + x[..., 2] / 2  # bottom right x
+    y[..., 3] = x[..., 1] + x[..., 3] / 2  # bottom right y
     return y
 
 
@@ -67,19 +70,36 @@ def error(msg):
     sys.exit(0)
 
 
-def main(opt):
-    image_path = Path(opt.images).resolve()
-    det_path = Path(opt.detection_path).resolve()
-    gt_path = Path(opt.groundtruth_path).resolve()
-    lable_path = Path(opt.labels).resolve()
+def main(
+    data,
+    name_file,
+    img_size=640,
+    batch_size=32,
+    stride=32,
+    single_cls=False,
+    pad=0.5,
+    rect=True,
+    device="cpu",
+    workers=8,
+):
+    assert os.path.isfile(name_file), "{} not found".format(name_file)
+    with open(name_file) as f:
+        names = f.read().strip().splitlines()
+        assert len(names) > 0, "No lables names in file {}".format(name_file)
+        if isinstance(names, list):
+            names = dict(enumerate(names)) 
 
-    names = {}
-    with lable_path.open(mode="r") as file:
-        for idx, line in enumerate(file):
-            line = line.strip()
-            names[idx] = line
+    dataloader = create_dataloader(
+        data,
+        img_size,
+        batch_size,
+        stride,
+        single_cls,
+        pad,
+        rect,
+        workers,
+    )[0]
 
-    print(image_path, det_path, gt_path)
 
     # Read original data from txt files
     jdict, stats, ap, ap_class = [], [], [], []
@@ -97,44 +117,7 @@ def main(opt):
         "mAP@0.95",
         "mAP@.5:.95",
     )
-    pbar = tqdm(
-        sorted(det_path.glob("*.txt")),
-        desc=s,
-        bar_format="{l_bar}{bar:10}{r_bar}{bar:-10b}",
-        total=len(list(det_path.glob("*.txt"))),
-    )
-    for i, file in enumerate(pbar):
-        # [N, 6] : class x y w h conf
-        dt.append(np.insert(np.loadtxt(file, ndmin=2), 0, i, axis=1))
-        file_name = file.parts[-1].split(".txt", 1)[0]
-
-        if not dt:
-            error("* There is no detection result in directory " + str(det_path))
-
-        if gt_path.joinpath(file_name + ".txt").exists():
-            gt.append(
-                np.insert(
-                    np.loadtxt(gt_path / (file_name + ".txt"), ndmin=2), 0, i, axis=1
-                )
-            )
-        else:
-            error(
-                "* Do not find the groundtruth file "
-                + str(gt_path / (file_name + ".txt"))
-            )
-
-        if image_path.joinpath(file_name + ".jpg").exists():
-            im = np.array(plt.imread(image_path.joinpath(file_name + ".jpg")))
-        else:
-            error(
-                "* Do not find the image file " + str(image_path / (file_name + ".jpg"))
-            )
-
-        gt[-1][:, 2:] *= np.array(im.shape[:2] * 2)
-        dt[-1][:, 2:-1] *= np.array(im.shape[:2] * 2)
-
-    batch_gt = np.vstack(gt)
-    batch_det = np.vstack(dt)
+    pbar = tqdm(dataloader, desc=s, bar_format=TQDM_BAR_FORMAT)  # progress bar
 
     # Config
     iouv = torch.linspace(0.5, 0.95, 10, device=device)  # iou vector for mAP@0.5:0.95
@@ -142,42 +125,40 @@ def main(opt):
     nc = len(names)
     seen = 0
 
-    # Metrics
-    for si in range(len(list(det_path.glob("*.txt")))):
-        # for si in range(batch_idx):
-        labels = batch_gt[batch_gt[:, 0] == si, 1:]
-        pred = batch_det[batch_det[:, 0] == si, 1:]
-        nl, npr = labels.shape[0], pred.shape[0]
-        correct = torch.zeros(npr, niou, dtype=torch.bool, device=device)  # init
-        seen += 1
+    for batch_i, (im, targets, detections, paths, shapes) in enumerate(pbar):
+        im = im.float() / 255.0  # uint8 to float32, 0-255 to 0.0-1.0
+        nb, _, height, width = im.shape  # batch size, channels, height, width
 
-        if npr == 0:
+        bn = int(targets[-1][0])
+
+        targets[:, 2:] *= torch.Tensor([width, height, width, height])  # to pixels
+        detections[:, 2:6] *= torch.Tensor([width, height, width, height])  # to pixels
+
+        for si in range(bn + 1):
+            labels = targets[targets[:, 0] == si][:, 1:]
+            pred = detections[detections[:, 0] == si][:, 1:]
+            pred = pred[:, [1, 2, 3, 4, 5, 0]]
+            path, shape = Path(paths[si]), shapes[si][0]
+            nl, npr = labels.shape[0], pred.shape[0]
+            correct = torch.zeros(npr, niou, dtype=torch.bool, device=device)
+
+            predn = pred.clone()
+            predn[:, :4] = xywh2xyxy(predn[:, :4])  
+            scale_boxes(
+                im[si].shape[1:], predn[:, :4], shape, shapes[si][1]
+            )  # native-space preds
+
             if nl:
-                stats.append((correct, *np.zeros((2, 0)), labels[:, 0]))
-            continue
+                tbox = xywh2xyxy(labels[:, 1:5])
+                scale_boxes(
+                    im[si].shape[1:], tbox, shape, shapes[si][1]
+                )  # native-space labels
+                labelsn = torch.cat((labels[:, 0:1], tbox), 1)  # native-space labels
+                correct = process_batch(predn, labelsn, iouv)
 
-        # Evaluate
-        # 将 target 的 xywh 转换成绝对坐标形式
-        tbox_gt = xywh2xyxy(labels[:, 1:])
-        tbox_det = xywh2xyxy(pred[:, 1:-1])
-
-        # lables and detections in a single image with xyxy format
-        labelsn = np.concatenate((labels[:, 0:1], tbox_gt), 1)
-        predn = np.concatenate((tbox_det, pred[:, -1:], pred[:, 0:1]), axis=1)
-
-        correct = process_batch(
-            torch.tensor(predn, device=device),
-            torch.tensor(labelsn, device=device),
-            iouv,
-        )
-        stats.append(
-            (
-                correct,
-                torch.tensor(predn[:, -2], device=device),
-                torch.tensor(predn[:, -1], device=device),
-                torch.tensor(labels[:, 0], device=device),
-            )
-        )  # (correct, conf, pcls, tcls)
+            stats.append(
+                (correct, pred[:, 4], pred[:, 5], labels[:, 0])
+            )  # (correct, conf, pcls, tcls)
 
     stats = [torch.cat(x, 0).cpu().numpy() for x in zip(*stats)]  # to numpy
     if len(stats) and stats[0].any():
@@ -201,7 +182,7 @@ def main(opt):
         )
 
     # Print results per class
-    for i, c in enumerate(ap_class):
+    for si, c in enumerate(ap_class):
         # print(pf % (names[c], seen, nt[c], p[i], r[i], ap50[i], ap[i]))
         print(
             pf
@@ -209,13 +190,13 @@ def main(opt):
                 names[c],
                 seen,
                 nt[c],
-                p[i],
-                r[i],
-                ap50[i],
-                ap85[i],
-                ap90[i],
-                ap95[i],
-                ap[i],
+                p[si],
+                r[si],
+                ap50[si],
+                ap85[si],
+                ap90[si],
+                ap95[si],
+                ap[si],
             )
         )
 
@@ -249,39 +230,54 @@ def main(opt):
         )
     )
 
-    for i, c in enumerate(ap_class):
+    for si, c in enumerate(ap_class):
         print(
             apf
             % (
                 names[c],
                 seen,
                 nt[c],
-                ap55to80[i][0],
-                ap55to80[i][1],
-                ap55to80[i][2],
-                ap55to80[i][3],
-                ap55to80[i][4],
-                ap55to80[i][5],
+                ap55to80[si][0],
+                ap55to80[si][1],
+                ap55to80[si][2],
+                ap55to80[si][3],
+                ap55to80[si][4],
+                ap55to80[si][5],
             )
         )
 
 
 def parse():
     parser = argparse.ArgumentParser()
+
     parser.add_argument(
-        "-det",
-        "--detection-path",
-        default=ROOT / "input/DR",
-        help="Detection result path.",
+        "--data",
+        type=str,
+        default=ROOT / "data/val.txt",
+        help="val.txt path",
     )
     parser.add_argument(
-        "-gt", "--groundtruth-path", default=ROOT / "input/GT", help="GroundTruth path."
+        "--name_file",
+        type=str,
+        default=ROOT / "data/names.txt",
+        help="names.txt path",
     )
     parser.add_argument(
-        "-img", "--images", default=ROOT / "input/image", help="images path "
+        "--img-size",
+        type=int,
+        default=640,
+        help="inference size (pixels)",
+    )
+
+    parser.add_argument("--batch_size", type=int, default=32, help="size of each batch")
+    parser.add_argument(
+        "--device",
+        type=str,
+        default="cpu",
+        help="cuda device, i.e. 0 or 0,1,2,3 or cpu",
     )
     parser.add_argument(
-        "-l", "--labels", default=ROOT / "input/label.txt", help="label path"
+        "--workers", type=int, default=8, help="number of dataloader workers"
     )
     opt = parser.parse_args()
     return opt
@@ -289,4 +285,5 @@ def parse():
 
 if __name__ == "__main__":
     opt = parse()
-    main(opt)
+    print(vars(opt))
+    main(**vars(opt))

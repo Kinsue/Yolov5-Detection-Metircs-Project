@@ -230,6 +230,7 @@ class LoadImagesAndLabels(Dataset):
             labels[:, 1:5] = xyxy2xywhn(
                 labels[:, 1:5], w=img.shape[1], h=img.shape[0], clip=True, eps=1e-3
             )
+        if nd:
             detections[:, 1:-1] = xyxy2xywhn(
                 detections[:, 1:-1], w=img.shape[1], h=img.shape[0], clip=True, eps=1e-3
             )

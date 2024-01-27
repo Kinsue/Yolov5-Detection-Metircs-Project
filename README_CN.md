@@ -24,7 +24,7 @@ $ git clone https://github.com/Kinsue/Yolov5-Detection-Metircs-Project.git
 ```
 
 ```shell
-$ conda create -n ydmp python=3.10
+$ conda create -n ydmp python=3.8
 $ conda activate ydmp 
 
 $ pip install -r requirements.txt 
@@ -32,9 +32,9 @@ $ pip install -r requirements.txt
 
 
 
-### 准备 groundtruth 数据
+### 准备 lables 数据
 
-- groundtruth 应为txt文本文件，在文件中，每一行应该以如下格式表示每一个检测框
+- lables 应为txt文本文件，在文件中，每一行应该以如下格式表示每一个检测框
 	-  `<class_id> <x_center> <y_center> <width> <hight>`
 - 数据样例
 
@@ -47,12 +47,13 @@ $ pip install -r requirements.txt
 
 
 
-### 准备 detection 数据
+### 准备 detections 数据
 
-- 在detection文件夹中，应该包含与对应 groundtruth 文件同名的文本文件。文件中每一行应该以如下格式表示每一个检测框
+- 在 detections 文件夹中，应该包含与对应 groundtruth 文件同名的文本文件。文件中每一行应该以如下格式表示每一个检测框
 	-  `<class_id> <x_center> <y_center> <width> <hight> <confidence>`
 
-	> **与groundtruth数据稍有不同，detection 数据应该在最后一列附加置信度数据**
+	> **与 lables 数据稍有不同，detections 数据应该在最后一列附加置信度数据**
+
 - 数据样例
 
 ```txt
@@ -63,51 +64,45 @@ $ pip install -r requirements.txt
 
 ```
 
-
-
 ### 准备图片数据
 
-- 请在图片文件夹下放置与 groundtruth 同名的 jpg 文件
+- 请在图片文件夹下放置与 lables 文件同名的 jpg 文件
 
 	> ! 当前程序仅支持 jpg 文件
 
-### 准备 label 数据
 
-- lable 数据应该为一个`.txt` 文件 , 文件中每一行为一个标签
+### 准备 names 数据
 
-
-
+- names 数据应该为一个`.txt` 文件 , 文件中每一行为一个标签
 
 ### 一个数据文件夹结构样例：
 
 ```txt
-input
-├── DR
+data
+├── lables
 │   ├── 000011.txt
 │   ├── 000012.txt
 │   └── 000024.txt
-├── GT
+├── detections
 │   ├── 000011.txt
 │   ├── 000012.txt
 │   └── 000024.txt
-├── image
+├── images
 │   ├── 000011.jpg
 │   ├── 000012.jpg
 │   └── 000024.jpg
-└── label.txt
+├── val.txt (optional)
+└── names.txt
 ```
 
-
+> **其中, val.txt 为指定的验证集数据, 文件中每一行包含一个验证图片路径**
 
 ## 计算 mAP
 
 ```shell
 $ cd {Directory of Project}
-$ python val.py -det {path of det} -gt {path of groundtruth} -img {path of img} -l label.txt
+$ python val.py --data {path/to/val.txt or path/to/images} --name_file {path/to/names.txt}
 ```
-
-
-
 
 ## Citation
 
