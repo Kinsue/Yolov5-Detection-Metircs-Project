@@ -12,10 +12,10 @@ Yolov5 Detection Metrics Project 项目针对 Yolov5 的推理结果进行计算
 本项目旨在以一种简单高效的方法评估给定的检测结果，请你跟随以下步骤来开始评估
 
 1. [环境安装](#环境安装)
-2. [准备 groundtruth 数据](#准备-groundtruth-数据)
-3. [准备 detection 数据](#准备-detection-数据)
+2. [准备 labels 数据](#准备-lables-数据)
+3. [准备 detections 数据](#准备-detections-数据)
 4. [准备图片数据](#准备图片数据)
-5. [准备 label 数据](#准备-label-数据)
+5. [准备 names 数据](#准备-names-数据)
 
 ### 环境安装
 ```shell
@@ -26,7 +26,6 @@ $ git clone https://github.com/Kinsue/Yolov5-Detection-Metircs-Project.git
 ```shell
 $ conda create -n ydmp python=3.8
 $ conda activate ydmp 
-
 $ pip install -r requirements.txt 
 ```
 

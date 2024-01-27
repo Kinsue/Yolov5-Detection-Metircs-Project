@@ -12,9 +12,9 @@ Yolov5 Detection Metrics Project calculates the inference results of Yolov5 and 
 This project aims to evaluate the given detection results in a simple and efficient manner. Please follow the steps below to start the evaluation.
 
 1. [Environment](#Environment)
-2. [Prepare groundtruth data](#prepare-groundtruth-data)
-3. [Prepare detection data](#prepare-detection-data)
-4. [Prepare image data](#prepare-image-data)
+2. [Prepare labels data](#prepare-labels-data)
+3. [Prepare detections data](#prepare-detections-data)
+4. [Prepare images data](#prepare-images-data)
 5. [Prepare label.txt](#prepare-labeltxt)
 
 ### Environment
@@ -25,17 +25,16 @@ $ git clone https://github.com/Kinsue/Yolov5-Detection-Metircs-Project.git
 ```
 
 ```shell
-$ conda create -n ydmp python=3.10
+$ conda create -n ydmp python=3.8
 $ conda activate ydmp 
-
 $ pip install -r requirements.txt 
 ```
 
 
 
-### Prepare groundtruth data
+### Prepare labels data
 
-- groundtruth should be a txt text file. In the file, each line should represent each detection box in the following format:
+- labels should be a txt text file. In the file, each line should represent each detection box in the following format:
 	-  `<class_id> <x_center> <y_center> <width> <hight>`
 - Sample
 
@@ -48,9 +47,9 @@ $ pip install -r requirements.txt
 
 
 
-### Prepare detection data
+### Prepare detections data
 
-- In the detection folder, there should be text files with the same name as the corresponding groundtruth files. Each line in the file should represent a detection box in the following format.
+- In the detections folder, there should be text files with the same name as the corresponding labels files. Each line in the file should represent a detections box in the following format.
 	-  `<class_id> <x_center> <y_center> <width> <hight> <confidence>`
 
 	> **Slightly different from the ground truth data, the detection data should have confidence scores appended in the last column.**
@@ -66,9 +65,9 @@ $ pip install -r requirements.txt
 
 
 
-### Prepare image data
+### Prepare images data
 
-- Please place jpg files with the same name as groundtruth in the image folder.
+- Please place jpg files with the same name as labels in the images folder.
 
 	> ! The current program only supports jpg files.
 
@@ -82,32 +81,32 @@ $ pip install -r requirements.txt
 ### A sample folder structure：
 
 ```txt
-input
-├── DR
+data
+├── lables
 │   ├── 000011.txt
 │   ├── 000012.txt
 │   └── 000024.txt
-├── GT
+├── detections
 │   ├── 000011.txt
 │   ├── 000012.txt
 │   └── 000024.txt
-├── image
+├── images
 │   ├── 000011.jpg
 │   ├── 000012.jpg
 │   └── 000024.jpg
-└── label.txt
+├── val.txt (optional)
+└── names.txt
 ```
 
+> **Among them, val.txt is the specified validation set data. Each line in the file contains a path to a validation image.**
 
 
 ## Calculate mAP
 
 ```shell
 $ cd {Directory of Project}
-$ python val.py -det {path of det} -gt {path of groundtruth} -img {path of img} -l label.txt
+$ python val.py --data {path/to/val.txt or path/to/images} --name_file {path/to/names.txt}
 ```
-
-
 
 
 ## Citation
