@@ -132,18 +132,18 @@ def main(
         bn = int(targets[-1][0])
 
         targets[:, 2:] *= torch.Tensor([width, height, width, height])  # to pixels
-        detections[:, 2:6] *= torch.Tensor([width, height, width, height])  # to pixels
+        for i, dt in enumerate(detections):
+            detections[i][:, :4] = dt[:, :4] * torch.Tensor([width, height, width, height])
+        # detections[:, 0:4] *= torch.Tensor([width, height, width, height])  # to pixels
 
-        for si in range(bn + 1):
+        for si, pred in enumerate(detections):
             labels = targets[targets[:, 0] == si][:, 1:]
-            pred = detections[detections[:, 0] == si][:, 1:]
-            pred = pred[:, [1, 2, 3, 4, 5, 0]]
             path, shape = Path(paths[si]), shapes[si][0]
             nl, npr = labels.shape[0], pred.shape[0]
             correct = torch.zeros(npr, niou, dtype=torch.bool, device=device)
-
+            seen += 1
             predn = pred.clone()
-            predn[:, :4] = xywh2xyxy(predn[:, :4])  
+            predn[:, :4] = xywh2xyxy(predn[:, :4])
             scale_boxes(
                 im[si].shape[1:], predn[:, :4], shape, shapes[si][1]
             )  # native-space preds

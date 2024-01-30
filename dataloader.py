@@ -236,11 +236,14 @@ class LoadImagesAndLabels(Dataset):
             )
 
         labels_out = torch.zeros((nl, 6))
-        detections_out = torch.zeros((nd, 7))
+        # detections_out = torch.zeros((nd, 7))
+        detections_out = torch.zeros((nd, 6))
+
         if nl:
             labels_out[:, 1:] = torch.from_numpy(labels)
         if nd:
-            detections_out[:, 1:] = torch.from_numpy(detections)
+            # detections_out[:, 1:] = torch.from_numpy(detections)
+            detections_out = torch.from_numpy(detections)
 
         # Convert
         img = img.transpose((2, 0, 1))[::-1]  # HWC to CHW, BGR to RGB
@@ -251,10 +254,11 @@ class LoadImagesAndLabels(Dataset):
     @staticmethod
     def collate_fn(batch):
         im, label, detection, path, shapes = zip(*batch)  # transposed
+        detection = list(detection)
         for i, (lb, dt) in enumerate(zip(label, detection)):
             lb[:, 0] = i  # add target image index for build_targets()
-            dt[:, 0] = i  # add target image index for build_targets()
-        return torch.stack(im, 0), torch.cat(label, 0), torch.cat(detection, 0), path, shapes
+            detection[i] = dt[:, [1, 2, 3, 4, 5, 0]]
+        return torch.stack(im, 0), torch.cat(label, 0), detection, path, shapes
 
     def load_image(self, i):
         # Loads 1 image from dataset index 'i', returns (im, original hw, resized hw)
@@ -404,7 +408,7 @@ def verify_image_label(args):
         
         # verify detections
         if os.path.isfile(dt_file):
-            ndf = 1
+            dnf = 1
             with open(dt_file) as f:
                 dt = [x.split() for x in f.read().strip().splitlines() if len(x)]
                 dt = np.array(dt, dtype=np.float32)

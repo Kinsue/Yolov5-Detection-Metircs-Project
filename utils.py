@@ -98,8 +98,8 @@ def compute_ap(recall, precision):
     mpre = np.flip(np.maximum.accumulate(np.flip(mpre)))
 
     # Integrate area under curve
-    # method = 'interp'  # methods: 'continuous', 'interp'
-    method = 'continuous'
+    method = 'interp'  # methods: 'continuous', 'interp'
+    # method = 'continuous'
     if method == 'interp':
         x = np.linspace(0, 1, 101)  # 101-point interp (COCO)
         ap = np.trapz(np.interp(x, mrec, mpre), x)  # integrate
